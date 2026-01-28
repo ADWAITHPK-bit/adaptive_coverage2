@@ -1,0 +1,56 @@
+Terminal 1 
+
+source /opt/ros/humble/setup.bash
+export TURTLEBOT3_MODEL=burger
+ros2 launch gazebo_ros gazebo.launch.py
+
+Terminal 2 
+
+ros2 run gazebo_ros spawn_entity.py \
+  -entity tb3_1 \
+  -file $(ros2 pkg prefix turtlebot3_gazebo)/share/turtlebot3_gazebo/models/turtlebot3_burger/model.sdf \
+  -x -1.0 -y 0.0 -z 0.01 \
+  -robot_namespace tb3_1
+
+Terminal 3 
+
+ros2 run gazebo_ros spawn_entity.py \
+  -entity tb3_2 \
+  -file $(ros2 pkg prefix turtlebot3_gazebo)/share/turtlebot3_gazebo/models/turtlebot3_burger/model.sdf \
+  -x 1.0 -y 0.0 -z 0.01 \
+  -robot_namespace tb3_2
+
+Terminal 4
+
+cd ~/ros2_ws
+colcon build --packages-select adaptive_coverage2
+source install/setup.bash
+
+Termianl 5 
+
+source ~/ros2_ws/install/setup.bash
+ros2 run adaptive_coverage2 coverage_controller \
+  --ros-args -p robot_name:=tb3_1
+
+Terminal 6 
+
+source ~/ros2_ws/install/setup.bash
+ros2 run adaptive_coverage2 coverage_controller \
+  --ros-args -p robot_name:=tb3_2
+
+Terminal 7 
+
+source ~/ros2_ws/install/setup.bash
+ros2 run adaptive_coverage2 neighbor_exchange \
+  --ros-args \
+  -p robot_id:=1 \
+  -p robot_ids:="[1,2]"
+
+Terminal 8 
+
+source ~/ros2_ws/install/setup.bash
+ros2 run adaptive_coverage2 neighbor_exchange \
+  --ros-args \
+  -p robot_id:=2 \
+  -p robot_ids:="[1,2]"
+
