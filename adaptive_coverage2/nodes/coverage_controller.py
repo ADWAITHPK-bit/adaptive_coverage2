@@ -13,7 +13,6 @@ from adaptive_coverage2.geometry.compute_laplacian import laplacian_consensus
 from adaptive_coverage2.geometry.adaptive_law import AdaptiveEstimator
 
 
-# ---------- helpers ----------
 def clamp_position(p, xmin, xmax, ymin, ymax):
     p[0, 0] = np.clip(p[0, 0], xmin, xmax)
     p[1, 0] = np.clip(p[1, 0], ymin, ymax)
@@ -40,7 +39,6 @@ class CoverageController(Node):
     def __init__(self):
         super().__init__('coverage_controller')
 
-        # -------- PARAMETERS --------
         self.declare_parameter('robot_name', 'tb3_1')
         self.robot_name = self.get_parameter('robot_name').value
 
@@ -49,11 +47,9 @@ class CoverageController(Node):
         self.zeta = 0.1
         self.dt = 0.1
 
-        # Workspace bounds
         self.X_MIN, self.X_MAX = -5.0, 5.0
         self.Y_MIN, self.Y_MAX = -5.0, 5.0
 
-        # -------- STATE --------
         self.position = None
         self.yaw = 0.0
 
@@ -65,7 +61,6 @@ class CoverageController(Node):
         self.neighbor_a_hat = {}
         self.l_ij = {}
 
-        # -------- ROS --------
         self.create_subscription(
             Odometry,
             f'/{self.robot_name}/odom',
@@ -103,7 +98,6 @@ class CoverageController(Node):
 
         self.get_logger().info(f"Coverage controller started for {self.robot_name}")
 
-    # -------- callbacks --------
     def odom_cb(self, msg):
         self.position = np.array([
             [msg.pose.pose.position.x],
@@ -135,24 +129,20 @@ class CoverageController(Node):
                 data[i+1:i+1+self.n_basis]
             ).reshape(self.n_basis, 1)
 
-    # -------- density --------
     def true_density(self, p):
         x, y = p.flatten()
         return np.exp(-((x - 1.0)**2 + (y - 1.0)**2))
 
-    # -------- main loop --------
     def control_loop(self):
         if self.position is None:
             return
 
-        # --- centroid ---
         c_i, phi_i, _ = compute_centroid(
             self.position,
             self.a_hat,
             self.neighbor_positions
         )
 
-        # Clamp centroid (CRITICAL)
         c_i = clamp_position(
             c_i,
             self.X_MIN, self.X_MAX,
@@ -162,22 +152,18 @@ class CoverageController(Node):
         c_i[0,0] = np.clip(c_i[0,0], self.X_MIN + 0.2, self.X_MAX - 0.2)
         c_i[1,0] = np.clip(c_i[1,0], self.Y_MIN + 0.2, self.Y_MAX - 0.2)
 
-        # --- cartesian control ---
         u = -self.kp * (self.position - c_i)
 
-        # --- workspace projection ---
         u = project_velocity(
             self.position, u,
             self.X_MIN, self.X_MAX,
             self.Y_MIN, self.Y_MAX
         )
 
-        # --- hard safety: stop if outside ---
         x, y = self.position.flatten()
         if x < self.X_MIN or x > self.X_MAX or y < self.Y_MIN or y > self.Y_MAX:
             u[:] = 0.0
 
-        # --- unicycle mapping ---
         ux, uy = u.flatten()
         theta = self.yaw
 
@@ -187,7 +173,7 @@ class CoverageController(Node):
         v = np.clip(v, 0.0, 0.4)
         w = np.clip(w, -1.5, 1.5)
 
-        # --- adaptive law ---
+        
         lam = self.true_density(self.position)
         if phi_i is not None:
             self.estimator.update_memory(phi_i, lam, self.dt)
@@ -205,7 +191,6 @@ class CoverageController(Node):
             self.a_hat + a_dot * self.dt
         )
 
-        # --- publish ---
         msg = Float64MultiArray()
         msg.data = self.a_hat.flatten().tolist()
         self.param_pub.publish(msg)
